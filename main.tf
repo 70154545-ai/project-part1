@@ -2,7 +2,7 @@ provider "aws" {
   region = "us-east-1"
 }
 
-# 1. VPC - Jo tum bana chuki ho
+
 resource "aws_vpc" "site_a_vpc" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
@@ -142,13 +142,13 @@ resource "aws_vpc" "site_b_vpc" {
   cidr_block           = "10.1.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
-  tags = { Name = "site-b-vpc" }
+  tags                 = { Name = "site-b-vpc" }
 }
 
 resource "aws_internet_gateway" "site_b_igw" {
   provider = aws.west
   vpc_id   = aws_vpc.site_b_vpc.id
-  tags = { Name = "site-b-igw" }
+  tags     = { Name = "site-b-igw" }
 }
 
 resource "aws_subnet" "site_b_public_2a" {
@@ -157,7 +157,7 @@ resource "aws_subnet" "site_b_public_2a" {
   cidr_block              = "10.1.1.0/24"
   availability_zone       = "us-west-2a"
   map_public_ip_on_launch = true
-  tags = { Name = "site-b-public-2a" }
+  tags                    = { Name = "site-b-public-2a" }
 }
 
 resource "aws_subnet" "site_b_public_2b" {
@@ -166,7 +166,7 @@ resource "aws_subnet" "site_b_public_2b" {
   cidr_block              = "10.1.2.0/24"
   availability_zone       = "us-west-2b"
   map_public_ip_on_launch = true
-  tags = { Name = "site-b-public-2b" }
+  tags                    = { Name = "site-b-public-2b" }
 }
 
 resource "aws_subnet" "site_b_private_2a" {
@@ -174,7 +174,7 @@ resource "aws_subnet" "site_b_private_2a" {
   vpc_id            = aws_vpc.site_b_vpc.id
   cidr_block        = "10.1.11.0/24"
   availability_zone = "us-west-2a"
-  tags = { Name = "site-b-private-2a" }
+  tags              = { Name = "site-b-private-2a" }
 }
 
 resource "aws_subnet" "site_b_private_2b" {
@@ -182,20 +182,20 @@ resource "aws_subnet" "site_b_private_2b" {
   vpc_id            = aws_vpc.site_b_vpc.id
   cidr_block        = "10.1.12.0/24"
   availability_zone = "us-west-2b"
-  tags = { Name = "site-b-private-2b" }
+  tags              = { Name = "site-b-private-2b" }
 }
 
 resource "aws_eip" "site_b_nat_eip" {
   provider = aws.west
   domain   = "vpc"
-  tags = { Name = "site-b-nat-eip" }
+  tags     = { Name = "site-b-nat-eip" }
 }
 
 resource "aws_nat_gateway" "site_b_nat" {
   provider      = aws.west
   allocation_id = aws_eip.site_b_nat_eip.id
   subnet_id     = aws_subnet.site_b_public_2a.id
-  tags = { Name = "site-b-nat" }
+  tags          = { Name = "site-b-nat" }
 }
 
 resource "aws_route_table" "site_b_public_rt" {
@@ -244,10 +244,10 @@ resource "aws_route_table_association" "site_b_priv_2b" {
 # ============ VPC PEERING Site-A <-> Site-B ============
 
 resource "aws_vpc_peering_connection" "site_a_to_b" {
-  vpc_id        = aws_vpc.site_a_vpc.id
-  peer_vpc_id   = aws_vpc.site_b_vpc.id
-  peer_region   = "us-west-2"
-  auto_accept   = false
+  vpc_id      = aws_vpc.site_a_vpc.id
+  peer_vpc_id = aws_vpc.site_b_vpc.id
+  peer_region = "us-west-2"
+  auto_accept = false
 
   tags = { Name = "site-a-to-site-b" }
 }
@@ -294,8 +294,8 @@ resource "aws_iam_role" "site_a_eks_cluster_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "eks.amazonaws.com" }
     }]
   })
@@ -311,8 +311,8 @@ resource "aws_iam_role" "site_a_eks_node_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "ec2.amazonaws.com" }
     }]
   })
@@ -371,5 +371,114 @@ resource "aws_eks_node_group" "site_a_nodes" {
     aws_iam_role_policy_attachment.site_a_node_worker,
     aws_iam_role_policy_attachment.site_a_node_cni,
     aws_iam_role_policy_attachment.site_a_node_registry
+  ]
+}
+# ================================
+# SITE B - EKS IAM ROLES
+# ================================
+
+resource "aws_iam_role" "site_b_eks_cluster_role" {
+  provider = aws.west
+  name     = "site-b-eks-cluster-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "eks.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "site_b_eks_cluster_policy" {
+  provider   = aws.west
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+  role       = aws_iam_role.site_b_eks_cluster_role.name
+}
+
+resource "aws_iam_role" "site_b_node_role" {
+  provider = aws.west
+  name     = "site-b-eks-node-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "site_b_node_worker" {
+  provider   = aws.west
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+  role       = aws_iam_role.site_b_node_role.name
+}
+
+resource "aws_iam_role_policy_attachment" "site_b_node_cni" {
+  provider   = aws.west
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+  role       = aws_iam_role.site_b_node_role.name
+}
+
+resource "aws_iam_role_policy_attachment" "site_b_node_registry" {
+  provider   = aws.west
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+  role       = aws_iam_role.site_b_node_role.name
+}
+
+# ================================
+# SITE B - EKS CLUSTER
+# ================================
+
+resource "aws_eks_cluster" "site_b_cluster" {
+  provider = aws.west
+  name     = "site-b-cluster"
+  role_arn = aws_iam_role.site_b_eks_cluster_role.arn
+  version  = "1.30"
+
+  vpc_config {
+    subnet_ids = [
+      aws_subnet.site_b_private_2a.id,
+      aws_subnet.site_b_private_2b.id,
+      aws_subnet.site_b_public_2a.id,
+      aws_subnet.site_b_public_2b.id
+    ]
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.site_b_eks_cluster_policy
+  ]
+}
+
+resource "aws_eks_node_group" "site_b_nodes" {
+  provider        = aws.west
+  cluster_name    = aws_eks_cluster.site_b_cluster.name
+  node_group_name = "site-b-nodes"
+  node_role_arn   = aws_iam_role.site_b_node_role.arn
+
+  subnet_ids = [
+    aws_subnet.site_b_private_2a.id,
+    aws_subnet.site_b_private_2b.id
+  ]
+
+  scaling_config {
+    desired_size = 2
+    max_size     = 2
+    min_size     = 1
+  }
+
+  instance_types = ["t3.medium"]
+
+  depends_on = [
+    aws_iam_role_policy_attachment.site_b_node_worker,
+    aws_iam_role_policy_attachment.site_b_node_cni,
+    aws_iam_role_policy_attachment.site_b_node_registry
   ]
 }
